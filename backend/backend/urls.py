@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework import routers
 from app.viewsets import TaskViewset
-from app.views import LoginView
+from app.views import LoginView, RegisterView
 
 router = routers.SimpleRouter()
 router.register(r"tasks", TaskViewset, basename="tasks")
@@ -26,5 +26,6 @@ router.register(r"tasks", TaskViewset, basename="tasks")
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('login/', LoginView.as_view(), name='login'),
+    path('register/', RegisterView.as_view(), name='register'),
     path("api/", include(router.urls))
 ]
