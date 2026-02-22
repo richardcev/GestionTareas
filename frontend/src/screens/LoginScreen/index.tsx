@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-// Asegúrate de que esta URL coincida con la ruta que configuraste en tu urls.py de Django
-const LOGIN_URL = 'http://localhost:8000/login/';
+
+const LOGIN_URL = `${import.meta.env.VITE_API_URL}login/`;
 
 const LoginScreen = () => {
   const [username, setUsername] = useState('');

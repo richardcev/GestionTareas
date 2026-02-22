@@ -15,8 +15,7 @@ export interface Task {
 
 type FilterStatus = 'all' | 'pending' | 'in_progress' | 'completed';
 
-// Reemplaza esto con la URL real de tu API
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = `${import.meta.env.VITE_API_URL}api/tasks/`;
 
 const TaskScreen = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
