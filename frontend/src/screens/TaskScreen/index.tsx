@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
 // --- Tipos e Interfaces ---
+export interface User {
+  id: number;
+  username: string;
+}
+
 export interface Task {
   id?: number;
   title: string;
@@ -10,39 +15,63 @@ export interface Task {
   created_at?: string;
   updated_at?: string;
   due_date: string | null;
-  owner?: number; 
+  owner?: number | ''; // Permitimos string vacío para el estado inicial del form
 }
 
 type FilterStatus = 'all' | 'pending' | 'in_progress' | 'completed';
 
 const API_URL = `${import.meta.env.VITE_API_URL}api/tasks/`;
+const USERS_URL = `${import.meta.env.VITE_API_URL}users/`; // Endpoint de usuarios
 
 const TaskScreen = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<User[]>([]); // Nuevo estado para los usuarios
   const [filter, setFilter] = useState<FilterStatus>('all');
   
-  // Estados para manejar la UI de creación/edición
   const [isCreating, setIsCreating] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   
-  // Estado del formulario
   const [formData, setFormData] = useState<Task>({
     title: '',
     description: '',
     status: 'pending',
     priority: 'medium',
-    due_date: ''
+    due_date: '',
+    owner: '' // Inicialmente vacío
   });
 
   // --- Llamadas a la API ---
-  const fetchTasks = async () => {
+  const fetchUsers = async () => {
     try {
-      const url = filter === 'all' ? API_URL : `${API_URL}?status=${filter}`;
-      
       // 1. Obtenemos el token de tu AuthContext
       const token = localStorage.getItem("access_token");
 
       // 2. Pasamos el token en los headers de la petición GET
+      const response = await fetch(USERS_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        }
+      });
+
+      // 3. Validamos que la respuesta sea exitosa
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      } else {
+        console.error("Error al cargar usuarios. Estado:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    }
+  };
+
+  const fetchTasks = async () => {
+    try {
+      const url = filter === 'all' ? API_URL : `${API_URL}?status=${filter}`;
+      const token = localStorage.getItem("access_token");
+
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -51,31 +80,35 @@ const TaskScreen = () => {
         }
       });
 
-      // 3. Validamos que la respuesta sea exitosa (código 200)
       if (response.ok) {
         const data = await response.json();
         setTasks(data);
-      } else {
-        // Si el token es inválido o expiró, mostrará el error aquí
-        console.error("Error de autorización o servidor. Estado:", response.status);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
     }
   };
 
+  // Cargar usuarios una sola vez al montar el componente
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // Cargar tareas cada vez que cambie el filtro
   useEffect(() => {
     fetchTasks();
   }, [filter]);
 
   const handleSave = async () => {
+    // Validamos que se haya seleccionado un usuario antes de guardar
+    if (!formData.owner) {
+      alert("Por favor, asigna la tarea a un usuario.");
+      return;
+    }
+
     try {
-      // Ajusta el owner_id según cómo manejes la sesión actual en el frontend
-      const payload = { ...formData, owner: 1 }; 
-
+      const payload = { ...formData }; 
       const token = localStorage.getItem("access_token");
-
-      console.log(token)
       
       const isEdit = editingTaskId !== null;
       const url = isEdit ? `${API_URL}${editingTaskId}/` : API_URL;
@@ -83,7 +116,7 @@ const TaskScreen = () => {
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}`  },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
         body: JSON.stringify(payload)
       });
 
@@ -96,26 +129,18 @@ const TaskScreen = () => {
     }
   };
 
-const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number) => {
     if (!window.confirm('¿Estás seguro de eliminar esta tarea?')) return;
     
     try {
-      // 1. Obtenemos el token de tu AuthContext
       const token = localStorage.getItem("access_token");
-      
-      // 2. Pasamos el token en los headers de la petición DELETE
       const response = await fetch(`${API_URL}${id}/`, { 
         method: 'DELETE',
-        headers: {
-          'Authorization': `Token ${token}`
-        }
+        headers: { 'Authorization': `Token ${token}` }
       });
 
-      // 3. Validamos que la eliminación fue exitosa (código 204 No Content)
       if (response.ok) {
         fetchTasks();
-      } else {
-        console.error("No se pudo eliminar la tarea. Estado:", response.status);
       }
     } catch (error) {
       console.error("Error deleting task:", error);
@@ -126,7 +151,7 @@ const handleDelete = async (id: number) => {
   const resetForm = () => {
     setIsCreating(false);
     setEditingTaskId(null);
-    setFormData({ title: '', description: '', status: 'pending', priority: 'medium', due_date: '' });
+    setFormData({ title: '', description: '', status: 'pending', priority: 'medium', due_date: '', owner: '' });
   };
 
   const startEditing = (task: Task) => {
@@ -135,15 +160,20 @@ const handleDelete = async (id: number) => {
       description: task.description || '',
       status: task.status,
       priority: task.priority,
-      due_date: task.due_date || ''
+      due_date: task.due_date || '',
+      owner: task.owner // Cargamos el dueño actual
     });
     setEditingTaskId(task.id!);
     setIsCreating(false);
   };
 
+  // Helper para mostrar el nombre del usuario en la tarjeta
+  const getUserName = (userId: number | string | undefined) => {
+    const user = users.find(u => u.id === userId);
+    return user ? user.username : 'Sin asignar';
+  };
+
   // --- Renderizado de UI ---
-  
-  // Diccionarios de colores para UX
   const statusColors = {
     pending: 'bg-gray-100 text-gray-800',
     in_progress: 'bg-blue-100 text-blue-800',
@@ -163,7 +193,6 @@ const handleDelete = async (id: number) => {
         {/* Header y Filtros */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <h1 className="text-3xl font-bold">Gestión de Tareas</h1>
-          
           <div className="flex bg-white rounded-lg shadow-sm p-1 border border-gray-200">
             {['all', 'pending', 'in_progress', 'completed'].map((f) => (
               <button
@@ -182,7 +211,7 @@ const handleDelete = async (id: number) => {
         {/* Grid de Tarjetas */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           
-          {/* Tarjeta de Creación (Botón "+" o Formulario en línea) */}
+          {/* Tarjeta de Creación */}
           {!isCreating && editingTaskId === null ? (
             <button 
               onClick={() => setIsCreating(true)}
@@ -207,60 +236,23 @@ const handleDelete = async (id: number) => {
                   className="w-full border border-gray-300 rounded p-2 text-sm focus:outline-none focus:border-indigo-500"
                   value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
                 />
-                <div className="grid grid-cols-2 gap-2 text-sm">
+                
+                {/* Nuevo Grid de 3 columnas para incluir el usuario */}
+                <div className="grid grid-cols-1 gap-2 text-sm">
                   <div>
-                    <label className="text-xs text-gray-500">Prioridad</label>
+                    <label className="text-xs text-gray-500">Asignar a</label>
                     <select 
                       className="w-full border rounded p-1"
-                      value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as Task['priority']})}
+                      value={formData.owner} 
+                      onChange={e => setFormData({...formData, owner: Number(e.target.value)})}
                     >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
+                      <option value="" disabled>Selecciona un usuario</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>{u.username}</option>
+                      ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-500">Fecha Límite</label>
-                    <input 
-                      type="date" className="w-full border rounded p-1"
-                      value={formData.due_date || ''} onChange={e => setFormData({...formData, due_date: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 mt-auto pt-2">
-                  <button onClick={resetForm} className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
-                  <button onClick={handleSave} className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">Guardar</button>
-                </div>
-              </div>
-            )
-          )}
-
-          {/* Listado de Tareas */}
-          {tasks.map((task) => {
-            // Renderizar el formulario si esta tarjeta está en modo edición
-            if (editingTaskId === task.id) {
-              return (
-                <div key={task.id} className="bg-white rounded-xl shadow-lg border border-indigo-200 p-5 flex flex-col gap-3 min-h-[250px]">
-                  <input 
-                    type="text" className="w-full border-b border-gray-300 p-2 focus:outline-none focus:border-indigo-500 font-bold"
-                    value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
-                  />
-                  <textarea 
-                    rows={2} className="w-full border border-gray-300 rounded p-2 text-sm focus:outline-none focus:border-indigo-500"
-                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
-                  />
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <label className="text-xs text-gray-500">Estado</label>
-                      <select 
-                        className="w-full border rounded p-1"
-                        value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as Task['status']})}
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-xs text-gray-500">Prioridad</label>
                       <select 
@@ -272,6 +264,75 @@ const handleDelete = async (id: number) => {
                         <option value="high">High</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Fecha Límite</label>
+                      <input 
+                        type="date" className="w-full border rounded p-1"
+                        value={formData.due_date || ''} onChange={e => setFormData({...formData, due_date: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-auto pt-2">
+                  <button onClick={resetForm} className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+                  <button onClick={handleSave} className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700">Guardar</button>
+                </div>
+              </div>
+            )
+          )}
+
+          {/* Listado de Tareas */}
+          {tasks.map((task) => {
+            if (editingTaskId === task.id) {
+              return (
+                <div key={task.id} className="bg-white rounded-xl shadow-lg border border-indigo-200 p-5 flex flex-col gap-3 min-h-[250px]">
+                  <input 
+                    type="text" className="w-full border-b border-gray-300 p-2 focus:outline-none focus:border-indigo-500 font-bold"
+                    value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
+                  />
+                  <textarea 
+                    rows={2} className="w-full border border-gray-300 rounded p-2 text-sm focus:outline-none focus:border-indigo-500"
+                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
+                  />
+                  <div className="grid grid-cols-1 gap-2 text-sm">
+                    <div>
+                      <label className="text-xs text-gray-500">Asignar a</label>
+                      <select 
+                        className="w-full border rounded p-1"
+                        value={formData.owner} 
+                        onChange={e => setFormData({...formData, owner: Number(e.target.value)})}
+                      >
+                        <option value="" disabled>Selecciona un usuario</option>
+                        {users.map(u => (
+                          <option key={u.id} value={u.id}>{u.username}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-gray-500">Estado</label>
+                        <select 
+                          className="w-full border rounded p-1"
+                          value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as Task['status']})}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Prioridad</label>
+                        <select 
+                          className="w-full border rounded p-1"
+                          value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as Task['priority']})}
+                        >
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex justify-end gap-2 mt-auto pt-2">
                     <button onClick={resetForm} className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
@@ -281,11 +342,8 @@ const handleDelete = async (id: number) => {
               );
             }
 
-            // Renderizar la tarjeta normal de lectura
             return (
               <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col hover:shadow-md transition-shadow min-h-[250px] relative group">
-                
-                {/* Badges */}
                 <div className="flex justify-between items-start mb-3">
                   <span className={`px-2 py-1 text-xs font-semibold rounded-full uppercase tracking-wider ${statusColors[task.status]}`}>
                     {task.status.replace('_', ' ')}
@@ -299,11 +357,12 @@ const handleDelete = async (id: number) => {
                 <p className="text-gray-600 text-sm mb-4 line-clamp-3">{task.description || 'Sin descripción'}</p>
 
                 <div className="mt-auto pt-4 border-t border-gray-100 flex justify-between items-center">
-                  <div className="text-xs text-gray-500 flex flex-col">
+                  <div className="text-xs text-gray-500 flex flex-col gap-1">
+                    {/* Mostramos el nombre del usuario asignado */}
+                    <span className="font-medium text-indigo-600">👤 {getUserName(task.owner)}</span>
                     {task.due_date && <span>Vence: {task.due_date}</span>}
                   </div>
                   
-                  {/* Botones de acción (visibles al pasar el mouse) */}
                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => startEditing(task)} className="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100" title="Editar">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
@@ -317,11 +376,9 @@ const handleDelete = async (id: number) => {
             );
           })}
         </div>
-
       </div>
     </div>
   );
 }
-
 
 export default TaskScreen;

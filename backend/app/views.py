@@ -1,10 +1,11 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, generics
 from rest_framework.permissions import AllowAny
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User
+from .serializers import UserSerializer
 
 class LoginView(APIView):
     # Permitimos que cualquier persona pueda acceder a este endpoint sin estar autenticada
@@ -69,3 +70,8 @@ class RegisterView(APIView):
             'user_id': user.pk,
             'username': user.username
         }, status=status.HTTP_201_CREATED)
+    
+
+class UserListView(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
