@@ -16,7 +16,7 @@ export interface Task {
 type FilterStatus = 'all' | 'pending' | 'in_progress' | 'completed';
 
 // Reemplaza esto con la URL real de tu API
-const API_URL = 'http://localhost:8000/api/tasks/';
+const API_URL = import.meta.env.VITE_API_URL;
 
 const TaskScreen = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -39,10 +39,27 @@ const TaskScreen = () => {
   const fetchTasks = async () => {
     try {
       const url = filter === 'all' ? API_URL : `${API_URL}?status=${filter}`;
-      // NOTA: Si tu endpoint está protegido, asegúrate de enviar el Token aquí
-      const response = await fetch(url);
-      const data = await response.json();
-      setTasks(data);
+      
+      // 1. Obtenemos el token de tu AuthContext
+      const token = localStorage.getItem("access_token");
+
+      // 2. Pasamos el token en los headers de la petición GET
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        }
+      });
+
+      // 3. Validamos que la respuesta sea exitosa (código 200)
+      if (response.ok) {
+        const data = await response.json();
+        setTasks(data);
+      } else {
+        // Si el token es inválido o expiró, mostrará el error aquí
+        console.error("Error de autorización o servidor. Estado:", response.status);
+      }
     } catch (error) {
       console.error("Error fetching tasks:", error);
     }
@@ -56,6 +73,10 @@ const TaskScreen = () => {
     try {
       // Ajusta el owner_id según cómo manejes la sesión actual en el frontend
       const payload = { ...formData, owner: 1 }; 
+
+      const token = localStorage.getItem("access_token");
+
+      console.log(token)
       
       const isEdit = editingTaskId !== null;
       const url = isEdit ? `${API_URL}${editingTaskId}/` : API_URL;
@@ -63,7 +84,7 @@ const TaskScreen = () => {
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}`  },
         body: JSON.stringify(payload)
       });
 
@@ -76,11 +97,27 @@ const TaskScreen = () => {
     }
   };
 
-  const handleDelete = async (id: number) => {
+const handleDelete = async (id: number) => {
     if (!window.confirm('¿Estás seguro de eliminar esta tarea?')) return;
+    
     try {
-      await fetch(`${API_URL}${id}/`, { method: 'DELETE' });
-      fetchTasks();
+      // 1. Obtenemos el token de tu AuthContext
+      const token = localStorage.getItem("access_token");
+      
+      // 2. Pasamos el token en los headers de la petición DELETE
+      const response = await fetch(`${API_URL}${id}/`, { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      });
+
+      // 3. Validamos que la eliminación fue exitosa (código 204 No Content)
+      if (response.ok) {
+        fetchTasks();
+      } else {
+        console.error("No se pudo eliminar la tarea. Estado:", response.status);
+      }
     } catch (error) {
       console.error("Error deleting task:", error);
     }
