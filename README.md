@@ -44,4 +44,12 @@ Desde la perspectiva del usuario final, la aplicación ofrece una experiencia fl
 
 ---
 
+## 🚀 Despliegue (Deployment)
+
+El proyecto se encuentra en producción operando bajo una arquitectura cliente-servidor completamente desacoplada:
+
+* **Frontend (Vercel):** La interfaz de usuario (construida con React y Vite) está desplegada en Vercel. Esta plataforma se encarga de servir la Single Page Application (SPA) de manera rápida y segura, consumiendo la API mediante variables de entorno configuradas en el panel de control.
+* **Backend (Render):** La API RESTful (construida con Django y DRF) se aloja como un Web Service en Render. 
+  * *Nota sobre infraestructura:* Para la correcta configuración del entorno de producción y la ejecución de las migraciones de la base de datos en la consola del servidor, fue necesario utilizar la opción **Premium Starter** de Render. Esto aseguró la persistencia y la capacidad de procesamiento requerida para inicializar el esquema de datos correctamente.
+
 *Desarrollado por Richard Cevallos Apolo.*
